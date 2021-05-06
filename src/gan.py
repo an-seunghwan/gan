@@ -36,6 +36,7 @@ train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(BUFFER_
 def make_generator_model():
     inputs = layers.Input((noise_dim, ))
     dense1 = layers.Dense(7*7*256, use_bias=False)
+    
     batchnorm1 = layers.BatchNormalization()
     h = layers.LeakyReLU()(batchnorm1(dense1(inputs)))
     h = tf.reshape(h, (-1, 7, 7, 256))
@@ -92,10 +93,10 @@ def discriminator_loss(real_decision, fake_decision):
 def generator_loss(fake_decision):
     return cross_entropy(tf.ones_like(fake_decision), fake_decision)
 #%%
-generator_optimizer = tf.keras.optimizers.Adam(1e-4)
-discriminator_optimizer = tf.keras.optimizers.Adam(1e-4)
+generator_optimizer = tf.keras.optimizers.Adam(0.001)
+discriminator_optimizer = tf.keras.optimizers.Adam(0.001)
 #%%
-checkpoint_dir = '.assets/training_checkpoints'
+checkpoint_dir = './assets/training_checkpoints'
 checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
 checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                  discriminator_optimizer=discriminator_optimizer,
@@ -166,7 +167,7 @@ def display_image(epoch_no):
 #%%
 display_image(EPOCHS)
 #%%
-anim_file = 'dcgan.gif'
+anim_file = './assets/dcgan.gif'
 
 with imageio.get_writer(anim_file, mode='I') as writer:
     filenames = glob.glob('./assets/image*.png')
