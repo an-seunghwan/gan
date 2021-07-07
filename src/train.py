@@ -39,8 +39,8 @@ PARAMS = {
 print(PARAMS)
 #%%
 import tensorflow_datasets as tfds
-# (train_images, test_images), info = tfds.load('celeb_a', split=['train', 'test'], shuffle_files=False, with_info=True)
-(train_images, test_images), info = tfds.load('celeb_a', split=['train[:10%]', 'test[:10%]'], shuffle_files=False, with_info=True)
+(train_images, test_images), info = tfds.load('celeb_a', split=['train', 'test'], shuffle_files=False, with_info=True)
+# (train_images, test_images), info = tfds.load('celeb_a', split=['train[:10%]', 'test[:10%]'], shuffle_files=False, with_info=True)
 
 print('image shape:', info.features['image'].shape)
 PARAMS['data_dim'] = 64
