@@ -130,7 +130,10 @@ def build_encoder(PARAMS):
     noise_h = layers.Dense(PARAMS['latent_dim'])(noise)
     h = h * noise_h
     
-    return K.models.Model([x, noise], h)
+    E = K.models.Model([x, noise], h)
+    # E.summary()
+    
+    return E
 #%%
 def upsample(x):
     return tf.image.resize(x, [2, 2], method='bilinear')
@@ -203,10 +206,9 @@ def build_synthesis(PARAMS):
     x = gen_block(x, input_style[1], input_noise, 8 * dim)  
     x = gen_block(x, input_style[2], input_noise, 6 * dim)  
     x = gen_block(x, input_style[3], input_noise, 4 * dim)  
-    x = gen_block(x, input_style[4], input_noise, 3 * dim)  
 
     x = layers.Conv2D(filters = 3, kernel_size = 1, padding = 'same', kernel_initializer = 'he_normal')(x)
-    x = tf.nn.tanh(x)
+    x = tf.nn.sigmoid(x)
 
     G = K.models.Model(inputs = input_style + [input_noise] + [y], outputs = x)
     # G.summary()
@@ -250,19 +252,17 @@ def dis_block(x, filters, pooling = True):
 def build_image_discriminator(PARAMS):
     x = layers.Input([PARAMS['data_dim'], PARAMS['data_dim'], PARAMS['channel']])
 
-    dim = 32
+    dim = 16
 
     h = dis_block(x, 1 * dim)  
     h = dis_block(h, 2 * dim) 
-    h = dis_block(h, 3 * dim) 
     h = dis_block(h, 4 * dim)
-    h = dis_block(h, 6 * dim) 
     h = dis_block(h, 8 * dim) 
-    h = dis_block(h, 16 * dim, pooling = False) 
+    h = dis_block(h, 16 * dim) 
 
     h = layers.Flatten()(h)
 
-    h = layers.Dense(16 * dim, kernel_initializer = 'he_normal')(h)
+    h = layers.Dense(4 * dim, kernel_initializer = 'he_normal')(h)
     h = layers.LeakyReLU(0.2)(h)
 
     h = layers.Dense(1, kernel_initializer = 'he_normal', activation='sigmoid')(h)
@@ -275,19 +275,17 @@ def build_image_discriminator(PARAMS):
 def build_image_classifier(PARAMS):
     x = layers.Input([PARAMS['data_dim'], PARAMS['data_dim'], PARAMS['channel']])
 
-    dim = 32
+    dim = 16
 
     h = dis_block(x, 1 * dim)  
     h = dis_block(h, 2 * dim) 
-    h = dis_block(h, 3 * dim) 
     h = dis_block(h, 4 * dim)
-    h = dis_block(h, 6 * dim) 
     h = dis_block(h, 8 * dim) 
-    h = dis_block(h, 16 * dim, pooling = False) 
+    h = dis_block(h, 16 * dim) 
 
     h = layers.Flatten()(h)
 
-    h = layers.Dense(16 * dim, kernel_initializer = 'he_normal')(h)
+    h = layers.Dense(4 * dim, kernel_initializer = 'he_normal')(h)
     h = layers.LeakyReLU(0.2)(h)
 
     h = layers.Dense(PARAMS['class_num'], kernel_initializer = 'he_normal', activation='softmax')(h)
@@ -308,10 +306,13 @@ def build_z_discriminator(PARAMS):
     h = layers.LeakyReLU(0.2)(h)
     h = layers.Dense(16, kernel_initializer = 'he_normal')(h)
     h = layers.LeakyReLU(0.2)(h)
+    h = layers.Dense(8, kernel_initializer = 'he_normal')(h)
+    h = layers.LeakyReLU(0.2)(h)
 
     h = layers.Dense(1, kernel_initializer = 'he_normal', activation='sigmoid')(h)
 
     D = K.models.Model(inputs = x, outputs = h)
+    # D.summary()
 
     return D
 #%%

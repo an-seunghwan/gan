@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import time
-os.chdir('/home/jeon/Desktop/an/gan')
+# os.chdir('/home/jeon/Desktop/an/gan')
+os.chdir(r'D:\gan')
 
 from modules import model
 #%%
