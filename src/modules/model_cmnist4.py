@@ -8,14 +8,16 @@ def build_encoder(PARAMS):
     x = layers.Input((PARAMS['data_dim'], PARAMS['data_dim'], PARAMS['channel']))
     noise = layers.Input((PARAMS['latent_dim']))
     
-    h = layers.Conv2D(filters = 16, kernel_size = 3, strides=2, padding = 'same')(x)
-    h = layers.BatchNormalization()(h)
-    h = layers.LeakyReLU(0.2)(h)    
-    h = layers.Conv2D(filters = 32, kernel_size = 3, strides=2, padding = 'same')(h)
-    h = layers.BatchNormalization()(h)
-    h = layers.LeakyReLU(0.2)(h)
+    # h = layers.Conv2D(filters = 16, kernel_size = 3, strides=2, padding = 'same')(x)
+    # h = layers.BatchNormalization()(h)
+    # h = layers.LeakyReLU(0.2)(h)    
+    # h = layers.Conv2D(filters = 32, kernel_size = 3, strides=2, padding = 'same')(h)
+    # h = layers.BatchNormalization()(h)
+    # h = layers.LeakyReLU(0.2)(h)
     
-    h = layers.Flatten()(h)
+    h = layers.Flatten()(x)
+    h = layers.Dense(1024)(h)
+    h = layers.LeakyReLU(0.2)(h)
     h = layers.Dense(512)(h)
     h = layers.LeakyReLU(0.2)(h)
     h = layers.Dense(PARAMS['latent_dim'])(h)
@@ -25,6 +27,7 @@ def build_encoder(PARAMS):
     noise_h = layers.LeakyReLU(0.2)(noise_h)
     
     h = h * noise_h
+    h = layers.Dense(PARAMS['latent_dim'])(h)
     
     E = K.models.Model([x, noise], h)
     # E.summary()
@@ -43,20 +46,22 @@ def build_generator(PARAMS):
     hy = layers.Dense(PARAMS['latent_dim'])(y)
     hy = layers.LeakyReLU(0.2)(hy)
     
-    h = layers.Dense(8*8*8)(layers.Concatenate()([hz, hy]))
+    h = layers.Dense(512)(layers.Concatenate()([hz, hy]))
     h = layers.LeakyReLU(0.2)(h)
-    h = layers.Dense(8*8*32)(h)
+    h = layers.Dense(1024)(h)
     h = layers.LeakyReLU(0.2)(h)
+    h = layers.Dense(3072, activation='sigmoid')(h)
+    h = tf.reshape(h, [-1, PARAMS['data_dim'], PARAMS['data_dim'], PARAMS['channel']])
     
-    h = tf.reshape(h, [-1, 8, 8, 32])
-    h = layers.Conv2D(filters = 32, kernel_size = 3, padding = 'same')(h)
-    h = layers.LeakyReLU(0.2)(h)
-    h = layers.UpSampling2D(size=(2, 2), interpolation='bilinear')(h)
-    h = layers.Conv2D(filters = 16, kernel_size = 3, padding = 'same')(h)
-    h = layers.LeakyReLU(0.2)(h)
-    h = layers.UpSampling2D(size=(2, 2), interpolation='bilinear')(h)
+    # h = tf.reshape(h, [-1, 8, 8, 32])
+    # h = layers.Conv2D(filters = 32, kernel_size = 3, padding = 'same')(h)
+    # h = layers.LeakyReLU(0.2)(h)
+    # h = layers.UpSampling2D(size=(2, 2), interpolation='bilinear')(h)
+    # h = layers.Conv2D(filters = 16, kernel_size = 3, padding = 'same')(h)
+    # h = layers.LeakyReLU(0.2)(h)
+    # h = layers.UpSampling2D(size=(2, 2), interpolation='bilinear')(h)
     
-    h = layers.Conv2D(filters = 3, kernel_size = 1, activation='sigmoid', padding = 'same')(h)
+    # h = layers.Conv2D(filters = 3, kernel_size = 1, activation='sigmoid', padding = 'same')(h)
     
     G = K.models.Model([z, y], h)
     # G.summary()
@@ -66,10 +71,12 @@ def build_generator(PARAMS):
 def build_image_discriminator(PARAMS):
     x = layers.Input([PARAMS['data_dim'], PARAMS['data_dim'], PARAMS['channel']])
 
-    h = layers.Conv2D(filters = 8, kernel_size = 3, strides = 2, padding = 'same')(x)
+    # h = layers.Conv2D(filters = 8, kernel_size = 3, strides = 2, padding = 'same')(x)
+    # h = layers.LeakyReLU(0.2)(h)
+    
+    h = layers.Flatten()(x)
+    h = layers.Dense(1024)(h)
     h = layers.LeakyReLU(0.2)(h)
-    h = layers.Flatten()(h)
-
     h = layers.Dense(512)(h)
     h = layers.LeakyReLU(0.2)(h)
     h = layers.Dense(128)(h)
@@ -85,10 +92,12 @@ def build_image_discriminator(PARAMS):
 def build_image_classifier(PARAMS):
     x = layers.Input([PARAMS['data_dim'], PARAMS['data_dim'], PARAMS['channel']])
 
-    h = layers.Conv2D(filters = 8, kernel_size = 3, strides = 2, padding = 'same')(x)
+    # h = layers.Conv2D(filters = 8, kernel_size = 3, strides = 2, padding = 'same')(x)
+    # h = layers.LeakyReLU(0.2)(h)
+    
+    h = layers.Flatten()(x)
+    h = layers.Dense(1024)(h)
     h = layers.LeakyReLU(0.2)(h)
-    h = layers.Flatten()(h)
-
     h = layers.Dense(512)(h)
     h = layers.LeakyReLU(0.2)(h)
     h = layers.Dense(128)(h)

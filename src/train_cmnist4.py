@@ -16,15 +16,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import cv2
-# os.chdir('D:\gan')
-os.chdir('/Users/anseunghwan/Documents/GitHub/gan')
+os.chdir('D:\gan')
+# os.chdir('/Users/anseunghwan/Documents/GitHub/gan')
 
-from modules import model_cmnist3
+from modules import model_cmnist4
 #%%
 PARAMS = {
     "batch_size": 128,
     "epochs": 10000, 
-    "learning_rate": 0.000001, 
+    "learning_rate": 0.00001, 
     "data": "cmnist",
     "class_num": 10,
     "latent_dim": 128, 
@@ -38,7 +38,7 @@ if PARAMS['data'] == "cmnist":
     
     '''colored mnist'''
     PARAMS['data_dim'] = 32
-    PARAMS['n_layer'] = int(np.log(PARAMS['data_dim']) / np.log(2)) - 1
+    # PARAMS['n_layer'] = int(np.log(PARAMS['data_dim']) / np.log(2)) - 1
     PARAMS["channel"] = 3
 
     x_train = x_train[..., tf.newaxis]
@@ -102,15 +102,15 @@ else:
     print('Invalid data type!')
     assert 0 == 1
 #%%
-encoder = model_cmnist3.build_encoder(PARAMS)
+encoder = model_cmnist4.build_encoder(PARAMS)
 encoder.summary()
-generator = model_cmnist3.build_generator(PARAMS)
+generator = model_cmnist4.build_generator(PARAMS)
 generator.summary()
-img_discriminator = model_cmnist3.build_image_discriminator(PARAMS)
+img_discriminator = model_cmnist4.build_image_discriminator(PARAMS)
 img_discriminator.summary()
-z_discriminator = model_cmnist3.build_z_discriminator(PARAMS)
+z_discriminator = model_cmnist4.build_z_discriminator(PARAMS)
 z_discriminator.summary()
-classifier = model_cmnist3.build_image_classifier(PARAMS)
+classifier = model_cmnist4.build_image_classifier(PARAMS)
 classifier.summary()
 #%%
 @tf.function
@@ -121,14 +121,12 @@ def loss_function(x_batch, y_batch, PARAMS):
     epsilon = tf.random.normal([PARAMS['batch_size'], PARAMS['latent_dim']])
     recon_z = encoder([x_batch, epsilon])
 
-    noise = np.random.uniform(0.0, 1.0, [PARAMS['batch_size'], PARAMS['data_dim'], PARAMS['data_dim'], 1]).astype('float32')
-    generated_images = generator([z]*PARAMS['n_layer'] + [noise] + [y_batch])
-    reconstructed_images = generator([recon_z]*PARAMS['n_layer'] + [noise] + [y_batch])
+    generated_images = generator([z, y_batch])
+    reconstructed_images = generator([recon_z, y_batch])
     
     '''loss'''    
-
     # 1. encoder
-    # lambda_coef = 0.2
+    # lambda_coef = 0.001
     # encoder_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
     encoder_loss2 = tf.reduce_mean(-tf.math.log(z_discriminator(recon_z) + 1e-8) + tf.math.log(1 - z_discriminator(recon_z) + 1e-8))
     # encoder_loss = encoder_loss1 + encoder_loss2
@@ -136,9 +134,10 @@ def loss_function(x_batch, y_batch, PARAMS):
 
     # 2. generator
     # generator_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
-    generator_loss2 = tf.reduce_mean(-tf.math.log(img_discriminator(reconstructed_images) + 1e-8) + tf.math.log(1 - img_discriminator(reconstructed_images) + 1e-8))
-    # generator_loss = generator_loss1 + generator_loss2
-    generator_loss = generator_loss2
+    generator_loss2 = tf.reduce_mean(-tf.math.log(img_discriminator(generated_images) + 1e-8) + tf.math.log(1 - img_discriminator(generated_images) + 1e-8))
+    generator_loss3 = tf.reduce_mean(-tf.math.log(img_discriminator(reconstructed_images) + 1e-8) + tf.math.log(1 - img_discriminator(reconstructed_images) + 1e-8))
+    # generator_loss = generator_loss1 + generator_loss2 + generator_loss3
+    generator_loss = generator_loss2 + generator_loss3
 
     # 3. discriminator of image
     img_dis_loss1 = tf.reduce_mean(-tf.math.log(img_discriminator(x_batch) + 1e-8))
@@ -154,7 +153,7 @@ def loss_function(x_batch, y_batch, PARAMS):
     # 5. classifier
     classification_loss1 = tf.reduce_mean(-tf.math.log(tf.reduce_sum(classifier(x_batch) * y_batch, axis=-1) + 1e-8))
     classification_loss2 = tf.reduce_mean(-tf.math.log(tf.reduce_sum(classifier(reconstructed_images) * y_batch, axis=-1) + 1e-8))
-    classification_loss = classification_loss1 + 5 * classification_loss2
+    classification_loss = classification_loss1 + classification_loss2
     
     return [z, recon_z, generated_images, reconstructed_images], [encoder_loss, generator_loss, img_dis_loss, z_dis_loss, classification_loss]
 #%%
@@ -172,17 +171,17 @@ def train_one_step(x_batch, y_batch, PARAMS):
 
         [z, recon_z, generated_images, reconstructed_images], [encoder_loss, generator_loss, img_dis_loss, z_dis_loss, classification_loss] = loss_function(x_batch, y_batch, PARAMS)
         
-        # eps = tf.random.uniform(shape=[PARAMS['batch_size'], 1, 1, 1])
-        # x_hat = eps*x_batch + (1 - eps)*generated_images
+        eps = tf.random.uniform(shape=[PARAMS['batch_size'], 1, 1, 1])
+        x_hat = eps*x_batch + (1 - eps)*generated_images
         
-        # with tf.GradientTape() as t:
-        #     t.watch(x_hat)
-        #     d_hat = img_discriminator(x_hat)
+        with tf.GradientTape() as t:
+            t.watch(x_hat)
+            d_hat = img_discriminator(x_hat)
 
-        # gradients = t.gradient(d_hat, [x_hat]) 
-        # l2_norm = tf.math.sqrt(tf.reduce_sum(tf.math.square(gradients[0]), axis=[1,2,3]))
-        # gradient_penalty = tf.reduce_mean(tf.math.square(l2_norm - 1.))
-        # img_dis_loss += 0.5 * gradient_penalty
+        gradients = t.gradient(d_hat, [x_hat]) 
+        l2_norm = tf.math.sqrt(tf.reduce_sum(tf.math.square(gradients[0]), axis=[1,2,3]))
+        gradient_penalty = tf.reduce_mean(tf.math.square(l2_norm - 1.))
+        img_dis_loss += 0.5 * gradient_penalty
         
     gradients_of_encoder = enc_tape.gradient(encoder_loss, encoder.trainable_variables)
     gradients_of_generator = gen_tape.gradient(generator_loss, generator.trainable_variables)
