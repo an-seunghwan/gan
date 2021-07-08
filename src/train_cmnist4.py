@@ -181,9 +181,8 @@ for _ in progress_bar_:
     gradients_of_classifier = tape.gradient(classification_loss, classifier.trainable_variables)
     classifier_optimizer.apply_gradients(zip(gradients_of_classifier, classifier.trainable_variables))
     
-    progress_bar_.set_description('setting: {} | iteration {}/{} | cls loss {:.3f}'.format(
-        PARAMS['data'], 
-        step, PARAMS['epochs'], 
+    progress_bar_.set_description('classification pre-training | iteration {}/{} | cls loss {:.3f}'.format(
+        step, 1000, 
         classification_loss.numpy()
     ))
 
