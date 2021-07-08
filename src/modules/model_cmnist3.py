@@ -128,7 +128,7 @@ def gen_block(x, style, noise, filters, up=True):
     delta = layers.Lambda(crop_to_fit)([noise, x])
     delta = layers.Dense(filters, kernel_initializer = 'zeros')(delta)
 
-    h = layers.Conv2D(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = 'he_normal')(x)
+    h = layers.Conv2D(filters = filters, kernel_size = 3, padding = 'same')(x)
     h = layers.add([h, delta])
     h = layers.Lambda(AdaIN)([h, gamma, beta])
     h = layers.LeakyReLU(0.2)(h)
@@ -144,8 +144,8 @@ def build_styler(PARAMS):
     S.add(layers.LeakyReLU(0.2))
     S.add(layers.Dense(PARAMS['latent_dim']))
     S.add(layers.LeakyReLU(0.2))
-    # S.add(layers.Dense(PARAMS['latent_dim']))
-    # S.add(layers.LeakyReLU(0.2))
+    S.add(layers.Dense(PARAMS['latent_dim']))
+    S.add(layers.LeakyReLU(0.2))
     
     # S.summary()
     
@@ -166,15 +166,14 @@ def build_synthesis(PARAMS):
 
     dim = 16
     # Actual Model
-    x = layers.Dense(4*4*4*dim, activation = 'relu', kernel_initializer = 'he_normal')(y)
+    x = layers.Dense(4*4*4*dim, activation = 'relu')(y)
     x = layers.Reshape([4, 4, 4*dim])(x)
     x = gen_block(x, input_style[0], input_noise, 16 * dim, up = False)  
     x = gen_block(x, input_style[1], input_noise, 8 * dim)  
     x = gen_block(x, input_style[2], input_noise, 4 * dim)  
     x = gen_block(x, input_style[3], input_noise, 2 * dim)  
 
-    x = layers.Conv2D(filters = 3, kernel_size = 1, padding = 'same', kernel_initializer = 'he_normal')(x)
-    x = tf.nn.sigmoid(x)
+    x = layers.Conv2D(filters = 3, kernel_size = 1, padding = 'same', activation='sigmoid')(x)
 
     G = K.models.Model(inputs = input_style + [input_noise] + [y], outputs = x)
     # G.summary()
@@ -207,7 +206,7 @@ def build_generator(PARAMS):
 #%%
 def dis_block(x, filters, pooling = True):
 
-    h = layers.Conv2D(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = 'he_normal')(x)
+    h = layers.Conv2D(filters = filters, kernel_size = 3, padding = 'same')(x)
     h = layers.LeakyReLU(0.2)(h)
 
     if pooling:
@@ -228,10 +227,10 @@ def build_image_discriminator(PARAMS):
 
     h = layers.Flatten()(h)
 
-    h = layers.Dense(4 * dim, kernel_initializer = 'he_normal')(h)
+    h = layers.Dense(4 * dim)(h)
     h = layers.LeakyReLU(0.2)(h)
 
-    h = layers.Dense(1, kernel_initializer = 'he_normal', activation='sigmoid')(h)
+    h = layers.Dense(1, activation='sigmoid')(h)
 
     D = K.models.Model(inputs = x, outputs = h)
     # D.summary()
@@ -251,10 +250,12 @@ def build_image_classifier(PARAMS):
 
     h = layers.Flatten()(h)
 
-    h = layers.Dense(4 * dim, kernel_initializer = 'he_normal')(h)
+    h = layers.Dense(8 * dim)(h)
+    h = layers.LeakyReLU(0.2)(h)
+    h = layers.Dense(4 * dim)(h)
     h = layers.LeakyReLU(0.2)(h)
 
-    h = layers.Dense(PARAMS['class_num'], kernel_initializer = 'he_normal', activation='softmax')(h)
+    h = layers.Dense(PARAMS['class_num'], activation='softmax')(h)
 
     D = K.models.Model(inputs = x, outputs = h)
     # D.summary()
@@ -264,18 +265,18 @@ def build_image_classifier(PARAMS):
 def build_z_discriminator(PARAMS):
     x = layers.Input([PARAMS['latent_dim']])
 
-    h = layers.Dense(128, kernel_initializer = 'he_normal')(x)
+    h = layers.Dense(128)(x)
     h = layers.LeakyReLU(0.2)(h)
-    h = layers.Dense(64, kernel_initializer = 'he_normal')(h)
+    h = layers.Dense(64)(h)
     h = layers.LeakyReLU(0.2)(h)
-    h = layers.Dense(32, kernel_initializer = 'he_normal')(h)
+    h = layers.Dense(32)(h)
     h = layers.LeakyReLU(0.2)(h)
-    h = layers.Dense(16, kernel_initializer = 'he_normal')(h)
+    h = layers.Dense(16)(h)
     h = layers.LeakyReLU(0.2)(h)
-    h = layers.Dense(8, kernel_initializer = 'he_normal')(h)
+    h = layers.Dense(8)(h)
     h = layers.LeakyReLU(0.2)(h)
 
-    h = layers.Dense(1, kernel_initializer = 'he_normal', activation='sigmoid')(h)
+    h = layers.Dense(1, activation='sigmoid')(h)
 
     D = K.models.Model(inputs = x, outputs = h)
     # D.summary()
