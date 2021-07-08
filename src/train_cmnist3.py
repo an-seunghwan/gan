@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import cv2
-# os.chdir('D:\gan')
-os.chdir('/Users/anseunghwan/Documents/GitHub/gan')
+os.chdir('D:\gan')
+# os.chdir('/Users/anseunghwan/Documents/GitHub/gan')
 
 from modules import model_cmnist3
 #%%
