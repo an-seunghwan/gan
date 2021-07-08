@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import cv2
-os.chdir('D:\gan')
-# os.chdir('/Users/anseunghwan/Documents/GitHub/gan')
+# os.chdir('D:\gan')
+os.chdir('/Users/anseunghwan/Documents/GitHub/gan')
 
 from modules import model_cmnist4
 #%%
@@ -27,7 +27,7 @@ PARAMS = {
     "learning_rate": 0.00001, 
     "data": "cmnist",
     "class_num": 10,
-    "latent_dim": 128, 
+    "latent_dim": 512, 
     # "ema_rate": 0.999
 }
 
@@ -37,7 +37,7 @@ if PARAMS['data'] == "cmnist":
     (x_train, y_train), (x_test, y_test) = K.datasets.mnist.load_data()
     
     '''colored mnist'''
-    PARAMS['data_dim'] = 32
+    PARAMS['data_dim'] = 28
     # PARAMS['n_layer'] = int(np.log(PARAMS['data_dim']) / np.log(2)) - 1
     PARAMS["channel"] = 3
 
@@ -59,7 +59,7 @@ if PARAMS['data'] == "cmnist":
         # plt.imshow(laplacian)
 
         # width
-        dilation_size = np.random.choice(np.arange(3), 1)[0]
+        dilation_size = np.random.choice(np.arange(4), 1)[0]
         kernel = np.ones((dilation_size, dilation_size))
         image = cv2.dilate(image, kernel)
         # plt.imshow(laplacian)
@@ -119,25 +119,26 @@ def loss_function(x_batch, y_batch, PARAMS):
     z = tf.random.normal([PARAMS['batch_size'], PARAMS['latent_dim']])
 
     epsilon = tf.random.normal([PARAMS['batch_size'], PARAMS['latent_dim']])
-    recon_z = encoder([x_batch, epsilon])
+    mean, logvar = encoder(x_batch)
+    recon_z = mean + tf.math.exp(logvar / 2) * epsilon
 
     generated_images = generator([z, y_batch])
     reconstructed_images = generator([recon_z, y_batch])
     
     '''loss'''    
     # 1. encoder
-    # lambda_coef = 0.001
-    # encoder_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
+    lambda_coef = 0.001
+    encoder_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
     encoder_loss2 = tf.reduce_mean(-tf.math.log(z_discriminator(recon_z) + 1e-8) + tf.math.log(1 - z_discriminator(recon_z) + 1e-8))
-    # encoder_loss = encoder_loss1 + encoder_loss2
-    encoder_loss = encoder_loss2
+    encoder_loss = encoder_loss1 + encoder_loss2
+    # encoder_loss = encoder_loss2
 
     # 2. generator
-    # generator_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
+    generator_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
     generator_loss2 = tf.reduce_mean(-tf.math.log(img_discriminator(generated_images) + 1e-8) + tf.math.log(1 - img_discriminator(generated_images) + 1e-8))
     generator_loss3 = tf.reduce_mean(-tf.math.log(img_discriminator(reconstructed_images) + 1e-8) + tf.math.log(1 - img_discriminator(reconstructed_images) + 1e-8))
-    # generator_loss = generator_loss1 + generator_loss2 + generator_loss3
-    generator_loss = generator_loss2 + generator_loss3
+    generator_loss = generator_loss1 + generator_loss2 + generator_loss3
+    # generator_loss = generator_loss2 + generator_loss3
 
     # 3. discriminator of image
     img_dis_loss1 = tf.reduce_mean(-tf.math.log(img_discriminator(x_batch) + 1e-8))
@@ -165,23 +166,46 @@ classifier_optimizer = K.optimizers.Adam(PARAMS['learning_rate'])
 
 # ema = tf.train.ExponentialMovingAverage(decay=PARAMS['ema_rate'])
 #%%
+step = 0
+progress_bar_ = tqdm(range(1000))
+progress_bar_.set_description('iteration {}/{} | current loss ?'.format(step, PARAMS['epochs']))
+
+'''classification pre-training'''
+for _ in progress_bar_:
+    x_batch, y_batch = next(iter(train_dataset))
+    step += 1
+    
+    with tf.GradientTape() as tape:
+        classification_loss = tf.reduce_mean(-tf.math.log(tf.reduce_sum(classifier(x_batch) * y_batch, axis=-1) + 1e-8))
+    
+    gradients_of_classifier = tape.gradient(classification_loss, classifier.trainable_variables)
+    classifier_optimizer.apply_gradients(zip(gradients_of_classifier, classifier.trainable_variables))
+    
+    progress_bar_.set_description('setting: {} | iteration {}/{} | cls loss {:.3f}'.format(
+        PARAMS['data'], 
+        step, PARAMS['epochs'], 
+        classification_loss.numpy()
+    ))
+
+    if step == 1000: break
+#%%
 @tf.function
 def train_one_step(x_batch, y_batch, PARAMS):
     with tf.GradientTape() as enc_tape, tf.GradientTape() as gen_tape, tf.GradientTape() as img_dis_tape, tf.GradientTape() as z_dis_tape, tf.GradientTape() as cls_tape:
 
         [z, recon_z, generated_images, reconstructed_images], [encoder_loss, generator_loss, img_dis_loss, z_dis_loss, classification_loss] = loss_function(x_batch, y_batch, PARAMS)
         
-        eps = tf.random.uniform(shape=[PARAMS['batch_size'], 1, 1, 1])
-        x_hat = eps*x_batch + (1 - eps)*generated_images
+        # eps = tf.random.uniform(shape=[PARAMS['batch_size'], 1, 1, 1])
+        # x_hat = eps*x_batch + (1 - eps)*generated_images
         
-        with tf.GradientTape() as t:
-            t.watch(x_hat)
-            d_hat = img_discriminator(x_hat)
+        # with tf.GradientTape() as t:
+        #     t.watch(x_hat)
+        #     d_hat = img_discriminator(x_hat)
 
-        gradients = t.gradient(d_hat, [x_hat]) 
-        l2_norm = tf.math.sqrt(tf.reduce_sum(tf.math.square(gradients[0]), axis=[1,2,3]))
-        gradient_penalty = tf.reduce_mean(tf.math.square(l2_norm - 1.))
-        img_dis_loss += 0.5 * gradient_penalty
+        # gradients = t.gradient(d_hat, [x_hat]) 
+        # l2_norm = tf.math.sqrt(tf.reduce_sum(tf.math.square(gradients[0]), axis=[1,2,3]))
+        # gradient_penalty = tf.reduce_mean(tf.math.square(l2_norm - 1.))
+        # img_dis_loss += 0.5 * gradient_penalty
         
     gradients_of_encoder = enc_tape.gradient(encoder_loss, encoder.trainable_variables)
     gradients_of_generator = gen_tape.gradient(generator_loss, generator.trainable_variables)
@@ -225,34 +249,6 @@ for _ in progress_bar:
     step += 1
     
     [z, recon_z, generated_images, reconstructed_images], [encoder_loss, generator_loss, img_dis_loss, z_dis_loss, classification_loss] = train_one_step(x_batch, y_batch, PARAMS)
-    
-    # with tf.GradientTape() as enc_tape, tf.GradientTape() as gen_tape, tf.GradientTape() as img_dis_tape, tf.GradientTape() as z_dis_tape, tf.GradientTape() as cls_tape:
-
-    #     [z, recon_z, generated_images, reconstructed_images], [encoder_loss, generator_loss, img_dis_loss, z_dis_loss, classification_loss] = loss_function(x_batch, y_batch, PARAMS)
-        
-    #     eps = tf.random.uniform(shape=[PARAMS['batch_size'], 1, 1, 1])
-    #     x_hat = eps*x_batch + (1 - eps)*generated_images
-        
-    #     with tf.GradientTape() as t:
-    #         t.watch(x_hat)
-    #         d_hat = img_discriminator(x_hat)
-
-    #     gradients = t.gradient(d_hat, [x_hat]) 
-    #     l2_norm = tf.math.sqrt(tf.reduce_sum(tf.math.square(gradients[0]), axis=[1,2,3]))
-    #     gradient_penalty = tf.reduce_mean(tf.math.square(l2_norm - 1.))
-    #     img_dis_loss += 0.5 * gradient_penalty
-        
-    # gradients_of_encoder = enc_tape.gradient(encoder_loss, encoder.trainable_variables)
-    # gradients_of_generator = gen_tape.gradient(generator_loss, generator.trainable_variables)
-    # gradients_of_img_discriminator = img_dis_tape.gradient(img_dis_loss, img_discriminator.trainable_variables)
-    # gradients_of_z_discriminator = z_dis_tape.gradient(z_dis_loss, z_discriminator.trainable_variables)
-    # gradients_of_classifier = cls_tape.gradient(classification_loss, classifier.trainable_variables)
-
-    # encoder_optimizer.apply_gradients(zip(gradients_of_encoder, encoder.trainable_variables))
-    # generator_optimizer.apply_gradients(zip(gradients_of_generator, generator.trainable_variables))
-    # img_discriminator_optimizer.apply_gradients(zip(gradients_of_img_discriminator, img_discriminator.trainable_variables))
-    # z_discriminator_optimizer.apply_gradients(zip(gradients_of_z_discriminator, z_discriminator.trainable_variables))
-    # classifier_optimizer.apply_gradients(zip(gradients_of_classifier, classifier.trainable_variables))
     
     progress_bar.set_description('setting: {} | iteration {}/{} | enc loss {:.3f}, gen loss {:.3f}, img loss {:.3f}, z loss {:.3f}, cls loss {:.3f}'.format(
         PARAMS['data'], 
