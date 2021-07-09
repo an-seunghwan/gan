@@ -17,9 +17,9 @@ def build_encoder(PARAMS):
         h = layers.BatchNormalization()(h)
         h = layers.LeakyReLU(0.2)(h)
         
-        h = layers.Conv2D(filters = dims[i], kernel_size = 3, strides = 1, padding = 'same')(h)
-        h = layers.BatchNormalization()(h)
-        h = layers.LeakyReLU(0.2)(h)
+        # h = layers.Conv2D(filters = dims[i], kernel_size = 3, strides = 1, padding = 'same')(h)
+        # h = layers.BatchNormalization()(h)
+        # h = layers.LeakyReLU(0.2)(h)
         
         skip = h + skip
     
@@ -27,7 +27,7 @@ def build_encoder(PARAMS):
     logvar = layers.Dense(PARAMS['latent_dim'])(layers.Flatten()(skip))
     
     E = K.models.Model(x, [mean, logvar])
-    E.summary()
+    # E.summary()
     
     return E
 #%%
@@ -48,15 +48,15 @@ def build_generator(PARAMS):
     for i in range(3):
         skip = layers.Conv2DTranspose(filters = dims[i], kernel_size = 5, strides = 2, padding = 'same', use_bias=False)(skip)
         skip = layers.BatchNormalization()(skip)
-        skip = layers.LeakyReLU(0.2)(skip)
+        skip = layers.ReLU()(skip)
         
         h = layers.Conv2D(filters = dims[i], kernel_size = 5, strides = 1, padding = 'same', use_bias=False)(skip)
         h = layers.BatchNormalization()(h)
-        h = layers.LeakyReLU(0.2)(h)
+        h = layers.ReLU()(h)
         
-        h = layers.Conv2D(filters = dims[i], kernel_size = 5, strides = 1, padding = 'same', use_bias=False)(h)
-        h = layers.BatchNormalization()(h)
-        h = layers.LeakyReLU(0.2)(h)
+        # h = layers.Conv2D(filters = dims[i], kernel_size = 5, strides = 1, padding = 'same', use_bias=False)(h)
+        # h = layers.BatchNormalization()(h)
+        # h = layers.ReLU()(h)
         
         skip = h + skip
     
@@ -125,7 +125,7 @@ def build_discriminator(PARAMS):
     cls = layers.Dense(PARAMS['class_num'], activation='softmax')(h)
 
     D = K.models.Model(inputs = x, outputs = [dis, cls])
-    D.summary()
+    # D.summary()
 
     return D
 #%%

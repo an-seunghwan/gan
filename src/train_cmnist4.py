@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import cv2
-# os.chdir('D:\gan')
-os.chdir('/Users/anseunghwan/Documents/GitHub/gan')
+os.chdir('D:\gan')
+# os.chdir('/Users/anseunghwan/Documents/GitHub/gan')
 
 from modules import model_cmnist4
 #%%
@@ -177,17 +177,17 @@ def train_one_step(x_batch, y_batch, PARAMS):
 
         [z, recon_z, generated_images, reconstructed_images], [encoder_loss, generator_loss, img_dis_loss, z_dis_loss, classification_loss] = loss_function(x_batch, y_batch, PARAMS)
         
-        # eps = tf.random.uniform(shape=[PARAMS['batch_size'], 1, 1, 1])
-        # x_hat = eps*x_batch + (1 - eps)*generated_images
+        eps = tf.random.uniform(shape=[PARAMS['batch_size'], 1, 1, 1])
+        x_hat = eps*x_batch + (1 - eps)*generated_images
         
-        # with tf.GradientTape() as t:
-        #     t.watch(x_hat)
-        #     d_hat = img_discriminator(x_hat)
+        with tf.GradientTape() as t:
+            t.watch(x_hat)
+            d_hat = discriminator(x_hat)
 
-        # gradients = t.gradient(d_hat, [x_hat]) 
-        # l2_norm = tf.math.sqrt(tf.reduce_sum(tf.math.square(gradients[0]), axis=[1,2,3]))
-        # gradient_penalty = tf.reduce_mean(tf.math.square(l2_norm - 1.))
-        # img_dis_loss += 0.5 * gradient_penalty
+        gradients = t.gradient(d_hat, [x_hat]) 
+        l2_norm = tf.math.sqrt(tf.reduce_sum(tf.math.square(gradients[0]), axis=[1,2,3]))
+        gradient_penalty = tf.reduce_mean(tf.math.square(l2_norm - 1.))
+        img_dis_loss += 0.5 * gradient_penalty
         
     gradients_of_encoder = enc_tape.gradient(encoder_loss, encoder.trainable_variables)
     gradients_of_generator = gen_tape.gradient(generator_loss, generator.trainable_variables)
@@ -218,7 +218,7 @@ def generate_and_save_images(images, epochs):
 
     for i in range(9):
         plt.subplot(3, 3, i+1)
-        plt.imshow(images[i])
+        plt.imshow((images[i] + 1.) / 2.)
         plt.axis('off')
 
     plt.savefig('./assets/image_at_epoch_{}.png'.format(epochs))
