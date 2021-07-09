@@ -27,7 +27,7 @@ PARAMS = {
     "learning_rate": 0.00001, 
     "data": "cmnist",
     "class_num": 10,
-    "latent_dim": 512, 
+    "latent_dim": 256, 
     # "ema_rate": 0.999
 }
 
@@ -37,8 +37,8 @@ if PARAMS['data'] == "cmnist":
     (x_train, y_train), (x_test, y_test) = K.datasets.mnist.load_data()
     
     '''colored mnist'''
-    PARAMS['data_dim'] = 28
-    # PARAMS['n_layer'] = int(np.log(PARAMS['data_dim']) / np.log(2)) - 1
+    PARAMS['data_dim'] = 32
+    PARAMS['n_layer'] = int(np.log(PARAMS['data_dim']) / np.log(2)) - 1
     PARAMS["channel"] = 3
 
     x_train = x_train[..., tf.newaxis]
@@ -59,7 +59,7 @@ if PARAMS['data'] == "cmnist":
         # plt.imshow(laplacian)
 
         # width
-        dilation_size = np.random.choice(np.arange(4), 1)[0]
+        dilation_size = np.random.choice(np.arange(3), 1)[0]
         kernel = np.ones((dilation_size, dilation_size))
         image = cv2.dilate(image, kernel)
         # plt.imshow(laplacian)
@@ -78,6 +78,9 @@ if PARAMS['data'] == "cmnist":
         # image = np.pad(image, ((padding, padding), (padding, padding), (0, 0)), 'constant') 
         # # plt.imshow(laplacian)
         
+        # scaling
+        image = (image * 2.) - 1.
+        
         assert image.shape == (PARAMS['data_dim'], PARAMS['data_dim'], PARAMS['channel'])
         
         return tf.cast(image, tf.float32)
@@ -88,9 +91,9 @@ if PARAMS['data'] == "cmnist":
     cx_train = np.array(cx_train)
     # plt.imshow(cx_train[0])
     
-    fig, axes = plt.subplots(2, 5, figsize=(10, 4))
-    for i in range(10):
-        axes.flatten()[i].imshow(cx_train[i])
+    fig, axes = plt.subplots(4, 10, figsize=(10, 4))
+    for i in range(40):
+        axes.flatten()[i].imshow((cx_train[i] + 1.) / 2.)
         axes.flatten()[i].axis('off')
     plt.savefig('./assets/data_examples.png',
                 dpi=200, bbox_inches="tight", pad_inches=0.1)
@@ -106,12 +109,10 @@ encoder = model_cmnist4.build_encoder(PARAMS)
 encoder.summary()
 generator = model_cmnist4.build_generator(PARAMS)
 generator.summary()
-img_discriminator = model_cmnist4.build_image_discriminator(PARAMS)
-img_discriminator.summary()
+discriminator = model_cmnist4.build_discriminator(PARAMS)
+discriminator.summary()
 z_discriminator = model_cmnist4.build_z_discriminator(PARAMS)
 z_discriminator.summary()
-classifier = model_cmnist4.build_image_classifier(PARAMS)
-classifier.summary()
 #%%
 @tf.function
 def loss_function(x_batch, y_batch, PARAMS):
@@ -127,23 +128,28 @@ def loss_function(x_batch, y_batch, PARAMS):
     
     '''loss'''    
     # 1. encoder
-    lambda_coef = 0.001
-    encoder_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
+    # lambda_coef = 0.001
+    # encoder_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
     encoder_loss2 = tf.reduce_mean(-tf.math.log(z_discriminator(recon_z) + 1e-8) + tf.math.log(1 - z_discriminator(recon_z) + 1e-8))
-    encoder_loss = encoder_loss1 + encoder_loss2
-    # encoder_loss = encoder_loss2
+    # encoder_loss = encoder_loss1 + encoder_loss2
+    encoder_loss = encoder_loss2
+
+    dis_gen, _ = discriminator(generated_images)
+    dis_recon, cls_recon = discriminator(reconstructed_images)
 
     # 2. generator
-    generator_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
-    generator_loss2 = tf.reduce_mean(-tf.math.log(img_discriminator(generated_images) + 1e-8) + tf.math.log(1 - img_discriminator(generated_images) + 1e-8))
-    generator_loss3 = tf.reduce_mean(-tf.math.log(img_discriminator(reconstructed_images) + 1e-8) + tf.math.log(1 - img_discriminator(reconstructed_images) + 1e-8))
-    generator_loss = generator_loss1 + generator_loss2 + generator_loss3
-    # generator_loss = generator_loss2 + generator_loss3
+    # generator_loss1 = lambda_coef * tf.reduce_mean(tf.reduce_sum(tf.abs(x_batch - reconstructed_images), axis=[1,2,3]))
+    generator_loss2 = tf.reduce_mean(-tf.math.log(dis_recon + 1e-8) + tf.math.log(1 - dis_recon + 1e-8))
+    generator_loss3 = tf.reduce_mean(-tf.math.log(dis_gen + 1e-8) + tf.math.log(1 - dis_gen + 1e-8))
+    # generator_loss = generator_loss1 + generator_loss2 + generator_loss3
+    generator_loss = generator_loss2 + generator_loss3
+
+    dis_data, cls_data = discriminator(x_batch)
 
     # 3. discriminator of image
-    img_dis_loss1 = tf.reduce_mean(-tf.math.log(img_discriminator(x_batch) + 1e-8))
-    img_dis_loss2 = tf.reduce_mean(-tf.math.log(1 - img_discriminator(reconstructed_images) + 1e-8))
-    img_dis_loss3 = tf.reduce_mean(-tf.math.log(1 - img_discriminator(generated_images) + 1e-8))
+    img_dis_loss1 = tf.reduce_mean(-tf.math.log(dis_data + 1e-8))
+    img_dis_loss2 = tf.reduce_mean(-tf.math.log(1 - dis_recon + 1e-8))
+    img_dis_loss3 = tf.reduce_mean(-tf.math.log(1 - dis_gen + 1e-8))
     img_dis_loss = img_dis_loss1 + img_dis_loss2 + img_dis_loss3
 
     # 4. discriminator of z
@@ -152,45 +158,22 @@ def loss_function(x_batch, y_batch, PARAMS):
     z_dis_loss = z_dis_loss1 + z_dis_loss2 
 
     # 5. classifier
-    classification_loss1 = tf.reduce_mean(-tf.math.log(tf.reduce_sum(classifier(x_batch) * y_batch, axis=-1) + 1e-8))
-    classification_loss2 = tf.reduce_mean(-tf.math.log(tf.reduce_sum(classifier(reconstructed_images) * y_batch, axis=-1) + 1e-8))
+    classification_loss1 = tf.reduce_mean(-tf.math.log(tf.reduce_sum(cls_data * y_batch, axis=-1) + 1e-8))
+    classification_loss2 = tf.reduce_mean(-tf.math.log(tf.reduce_sum(cls_recon * y_batch, axis=-1) + 1e-8))
     classification_loss = classification_loss1 + classification_loss2
     
     return [z, recon_z, generated_images, reconstructed_images], [encoder_loss, generator_loss, img_dis_loss, z_dis_loss, classification_loss]
 #%%
 encoder_optimizer = K.optimizers.Adam(PARAMS['learning_rate'])
 generator_optimizer = K.optimizers.Adam(PARAMS['learning_rate'])
-img_discriminator_optimizer = K.optimizers.Adam(PARAMS['learning_rate'])
+discriminator_optimizer = K.optimizers.Adam(PARAMS['learning_rate'])
 z_discriminator_optimizer = K.optimizers.Adam(PARAMS['learning_rate'])
-classifier_optimizer = K.optimizers.Adam(PARAMS['learning_rate'])
 
 # ema = tf.train.ExponentialMovingAverage(decay=PARAMS['ema_rate'])
 #%%
-step = 0
-progress_bar_ = tqdm(range(1000))
-progress_bar_.set_description('iteration {}/{} | current loss ?'.format(step, PARAMS['epochs']))
-
-'''classification pre-training'''
-for _ in progress_bar_:
-    x_batch, y_batch = next(iter(train_dataset))
-    step += 1
-    
-    with tf.GradientTape() as tape:
-        classification_loss = tf.reduce_mean(-tf.math.log(tf.reduce_sum(classifier(x_batch) * y_batch, axis=-1) + 1e-8))
-    
-    gradients_of_classifier = tape.gradient(classification_loss, classifier.trainable_variables)
-    classifier_optimizer.apply_gradients(zip(gradients_of_classifier, classifier.trainable_variables))
-    
-    progress_bar_.set_description('classification pre-training | iteration {}/{} | cls loss {:.3f}'.format(
-        step, 1000, 
-        classification_loss.numpy()
-    ))
-
-    if step == 1000: break
-#%%
 @tf.function
 def train_one_step(x_batch, y_batch, PARAMS):
-    with tf.GradientTape() as enc_tape, tf.GradientTape() as gen_tape, tf.GradientTape() as img_dis_tape, tf.GradientTape() as z_dis_tape, tf.GradientTape() as cls_tape:
+    with tf.GradientTape() as enc_tape, tf.GradientTape() as gen_tape, tf.GradientTape(persistent=True) as dis_tape, tf.GradientTape() as z_dis_tape:
 
         [z, recon_z, generated_images, reconstructed_images], [encoder_loss, generator_loss, img_dis_loss, z_dis_loss, classification_loss] = loss_function(x_batch, y_batch, PARAMS)
         
@@ -208,15 +191,15 @@ def train_one_step(x_batch, y_batch, PARAMS):
         
     gradients_of_encoder = enc_tape.gradient(encoder_loss, encoder.trainable_variables)
     gradients_of_generator = gen_tape.gradient(generator_loss, generator.trainable_variables)
-    gradients_of_img_discriminator = img_dis_tape.gradient(img_dis_loss, img_discriminator.trainable_variables)
+    gradients_of_discriminator1 = dis_tape.gradient(img_dis_loss, discriminator.trainable_variables)
+    gradients_of_discriminator2 = dis_tape.gradient(classification_loss, discriminator.trainable_variables)
     gradients_of_z_discriminator = z_dis_tape.gradient(z_dis_loss, z_discriminator.trainable_variables)
-    gradients_of_classifier = cls_tape.gradient(classification_loss, classifier.trainable_variables)
 
     encoder_optimizer.apply_gradients(zip(gradients_of_encoder, encoder.trainable_variables))
     generator_optimizer.apply_gradients(zip(gradients_of_generator, generator.trainable_variables))
-    img_discriminator_optimizer.apply_gradients(zip(gradients_of_img_discriminator, img_discriminator.trainable_variables))
+    discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator1, discriminator.trainable_variables))
+    discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator2, discriminator.trainable_variables))
     z_discriminator_optimizer.apply_gradients(zip(gradients_of_z_discriminator, z_discriminator.trainable_variables))
-    classifier_optimizer.apply_gradients(zip(gradients_of_classifier, classifier.trainable_variables))
     
     # ema.apply(encoder.trainable_variables)
     # ema.apply(generator.trainable_variables)
@@ -262,7 +245,6 @@ for _ in progress_bar:
 #%%
 encoder.save_weights('./assets/weights_enc/weights')
 generator.save_weights('./assets/weights_gen/weights')
-img_discriminator.save_weights('./assets/weights_img/weights')
+discriminator.save_weights('./assets/weights_img/weights')
 z_discriminator.save_weights('./assets/weights_z/weights')
-classifier.save_weights('./assets/weights_cls/weights')
 #%%
