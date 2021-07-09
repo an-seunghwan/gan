@@ -58,7 +58,7 @@ def build_generator(PARAMS):
     h = layers.Reshape((4, 4, 16))(z)
     h = layers.Concatenate()([h, hy])
     h = layers.BatchNormalization()(h)
-    h = layers.LeakyReLU(0.2)(h)
+    h = layers.ReLU()(h)
     
     dims = [128, 64, 32]
     skip = h
@@ -67,17 +67,17 @@ def build_generator(PARAMS):
         skip = layers.BatchNormalization()(skip)
         skip = layers.ReLU()(skip)
         
-        h = layers.Conv2D(filters = dims[i], kernel_size = 5, strides = 1, padding = 'same', use_bias=False)(skip)
+        h = layers.Conv2D(filters = dims[i], kernel_size = 3, strides = 1, padding = 'same', use_bias=False)(skip)
         h = layers.BatchNormalization()(h)
         h = layers.ReLU()(h)
         
-        h = layers.Conv2D(filters = dims[i], kernel_size = 5, strides = 1, padding = 'same', use_bias=False)(h)
+        h = layers.Conv2D(filters = dims[i], kernel_size = 3, strides = 1, padding = 'same', use_bias=False)(h)
         h = layers.BatchNormalization()(h)
         h = layers.ReLU()(h)
         
         skip = h + skip
     
-    h = layers.Conv2DTranspose(3, (1, 1), strides=1, padding='same', use_bias=False, activation='tanh')(skip)
+    h = layers.Conv2DTranspose(3, (1, 1), strides = 1, padding='same', use_bias=False, activation='tanh')(skip)
     
     G = K.models.Model([z, y], h)
     # G.summary()
