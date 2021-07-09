@@ -215,3 +215,20 @@ plt.savefig('./assets/style_transfer.png')
 # plt.show()
 plt.close()
 #%%
+tf.random.set_seed(520)
+epsilon = tf.random.normal(shape=(100, PARAMS['latent_dim']))
+label = np.zeros((100, PARAMS['class_num']))
+label[:, 8] = 1
+xhat = model.Decoder([epsilon, label])
+
+fig = plt.figure(figsize=(10, 10))
+
+for i in range(100):
+    plt.subplot(10, 10, i+1)
+    plt.imshow((xhat[i] + 1.) / 2.)
+    plt.axis('off')
+plt.suptitle('with label 8', y=0.9)
+plt.savefig('./assets/generated.png', bbox_inches="tight", pad_inches=0.1)
+plt.show()
+# plt.close()
+#%%
